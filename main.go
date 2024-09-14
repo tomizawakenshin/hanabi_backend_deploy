@@ -4,6 +4,7 @@ import (
 	"gin-fleamarket/controller"
 	"gin-fleamarket/infra"
 	"gin-fleamarket/middlewares"
+	"gin-fleamarket/models"
 	"net/http"
 	"os" // 追加: 環境変数からポートを取得するため
 	"time"
@@ -81,6 +82,10 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 func main() {
 	infra.Initialize()
 	db := infra.SetupDB()
+
+	if err := db.AutoMigrate(&models.User{}, &models.Comment{}, &models.Hanabi{}, &models.Like{}); err != nil {
+		panic("Failed to migrate db")
+	}
 
 	r := setupRouter(db)
 
