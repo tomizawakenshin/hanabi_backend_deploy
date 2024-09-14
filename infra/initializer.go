@@ -16,14 +16,13 @@
 package infra
 
 import (
-	"log"
-
-	"github.com/joho/godotenv"
+	"fmt"
 )
 
 func Initialize() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
+	fmt.Println("In Initializer.go")
 }
