@@ -7,6 +7,7 @@ import (
 	"gin-fleamarket/models"
 	"gin-fleamarket/services"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -173,16 +174,30 @@ func (c *HanabiController) Create(ctx *gin.Context) {
 func uploadFileToGCS(bucketName, objectName string, file multipart.File) (string, error) {
 	ctx := context.Background()
 
-	// 環境変数から認証情報ファイルのパスを取得
-	credentialsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	if credentialsFile == "" {
+	// 環境変数から認証情報ファイルの内容を取得
+	credentialsJSON := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if credentialsJSON == "" {
 		return "", fmt.Errorf("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set")
 	}
 
-	// 認証情報を使用してクライアントを作成
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialsFile))
+	// 一時ファイルを作成して、認証情報をそこに書き込む
+	tmpFile, err := ioutil.TempFile("", "gcp-creds-*.json")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create temporary file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name()) // 処理後に一時ファイルを削除
+
+	if _, err = tmpFile.Write([]byte(credentialsJSON)); err != nil {
+		return "", fmt.Errorf("failed to write credentials to temporary file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("failed to close temporary file: %v", err)
+	}
+
+	// 認証情報を使用してクライアントを作成
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(tmpFile.Name()))
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCS client: %v", err)
 	}
 	defer client.Close()
 
@@ -193,10 +208,10 @@ func uploadFileToGCS(bucketName, objectName string, file multipart.File) (string
 	bucket := client.Bucket(bucketName)
 	wc := bucket.Object(objectName).NewWriter(ctx)
 	if _, err = io.Copy(wc, file); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to upload file to GCS: %v", err)
 	}
 	if err := wc.Close(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to close writer after upload: %v", err)
 	}
 
 	// 公開URLを作成
